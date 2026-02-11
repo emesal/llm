@@ -82,6 +82,11 @@ impl ToolStreamState {
                 self.handle_tool_complete(tool_call, ctx).await;
                 Ok(true)
             }
+            StreamChunk::Thinking(delta) => {
+                // For now, display thinking content inline (could be styled later)
+                self.handle_text(delta, ctx).await?;
+                Ok(true)
+            }
             StreamChunk::Done { .. } => Ok(false),
         }
     }

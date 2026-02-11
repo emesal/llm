@@ -38,6 +38,9 @@ pub enum StreamChunk {
     /// Text content delta
     Text(String),
 
+    /// Thinking/reasoning content delta (extended thinking models)
+    Thinking(String),
+
     /// Tool use block started (contains tool id and name)
     ToolUseStart {
         /// The index of this content block in the response

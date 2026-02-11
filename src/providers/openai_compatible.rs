@@ -230,6 +230,7 @@ pub struct OpenAIStreamChoice {
 #[derive(Deserialize, Debug)]
 pub struct OpenAIStreamDelta {
     pub content: Option<String>,
+    pub reasoning_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<StreamToolCall>>,
 }
@@ -1001,6 +1002,13 @@ fn parse_openai_sse_chunk_with_tools(
                         }
                     }
 
+                    // Handle reasoning/thinking content
+                    if let Some(reasoning) = &choice.delta.reasoning_content {
+                        if !reasoning.is_empty() {
+                            results.push(ChatStreamChunk::Thinking(reasoning.clone()));
+                        }
+                    }
+
                     // Handle tool calls
                     if let Some(tool_calls) = &choice.delta.tool_calls {
                         for tc in tool_calls {
@@ -1087,6 +1095,7 @@ struct OpenAIToolStreamChoice {
 #[derive(Debug, Deserialize)]
 struct OpenAIToolStreamDelta {
     content: Option<String>,
+    reasoning_content: Option<String>,
     tool_calls: Option<Vec<OpenAIToolStreamToolCall>>,
 }
 
@@ -1607,5 +1616,32 @@ mod tests {
             "Expected ToolUseComplete, got {:?}",
             results[0]
         );
+    }
+
+    #[test]
+    fn test_parse_openai_stream_reasoning_content() {
+        let event = r#"data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"reasoning_content":"thinking step 1"},"finish_reason":null}]}"#;
+        let mut tool_states = HashMap::new();
+        let results = parse_openai_sse_chunk_with_tools(event, &mut tool_states).unwrap();
+
+        assert_eq!(results.len(), 1);
+        match &results[0] {
+            ChatStreamChunk::Thinking(text) => assert_eq!(text, "thinking step 1"),
+            _ => panic!("Expected Thinking chunk, got {:?}", results[0]),
+        }
+    }
+
+    #[test]
+    fn test_parse_openai_stream_reasoning_content_null() {
+        // null reasoning_content should be silently ignored (serde default)
+        let event = r#"data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"hello","reasoning_content":null},"finish_reason":null}]}"#;
+        let mut tool_states = HashMap::new();
+        let results = parse_openai_sse_chunk_with_tools(event, &mut tool_states).unwrap();
+
+        assert_eq!(results.len(), 1);
+        match &results[0] {
+            ChatStreamChunk::Text(text) => assert_eq!(text, "hello"),
+            _ => panic!("Expected Text chunk, got {:?}", results[0]),
+        }
     }
 }

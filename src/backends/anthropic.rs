@@ -234,6 +234,8 @@ struct AnthropicDelta {
     delta_type: Option<String>,
     /// Text content (for text_delta)
     text: Option<String>,
+    /// Thinking content (for thinking_delta)
+    thinking: Option<String>,
     /// Partial JSON string (for input_json_delta)
     partial_json: Option<String>,
     /// Stop reason (for message_delta)
@@ -496,6 +498,18 @@ impl Anthropic {
         (anthropic_tools, final_tool_choice)
     }
 
+    /// Builds the thinking config from the current configuration.
+    fn build_thinking_config(config: &AnthropicConfig) -> Option<ThinkingConfig> {
+        if config.reasoning {
+            Some(ThinkingConfig {
+                thinking_type: "enabled".to_string(),
+                budget_tokens: config.thinking_budget_tokens.unwrap_or(16000),
+            })
+        } else {
+            None
+        }
+    }
+
     /// Converts a SystemPrompt to the request format
     fn system_to_request(system: &SystemPrompt) -> RequestSystemPrompt<'_> {
         match system {
@@ -689,14 +703,7 @@ impl ChatProvider for Anthropic {
             &self.config.tool_choice,
         );
 
-        let thinking = if self.config.reasoning {
-            Some(ThinkingConfig {
-                thinking_type: "enabled".to_string(),
-                budget_tokens: self.config.thinking_budget_tokens.unwrap_or(16000),
-            })
-        } else {
-            None
-        };
+        let thinking = Self::build_thinking_config(&self.config);
 
         let system_prompt = Self::system_to_request(&self.config.system);
 
@@ -830,6 +837,8 @@ impl ChatProvider for Anthropic {
 
         let system_prompt = Self::system_to_request(&self.config.system);
 
+        let thinking = Self::build_thinking_config(&self.config);
+
         let req_body = AnthropicCompleteRequest {
             messages: anthropic_messages,
             model: &self.config.model,
@@ -841,7 +850,7 @@ impl ChatProvider for Anthropic {
             top_k: self.config.top_k,
             tools: None,
             tool_choice: None,
-            thinking: None,
+            thinking,
         };
 
         let mut request = self
@@ -911,7 +920,7 @@ impl ChatProvider for Anthropic {
             top_k: self.config.top_k,
             tools: anthropic_tools,
             tool_choice: final_tool_choice,
-            thinking: None, // Thinking not supported with streaming tools
+            thinking: Self::build_thinking_config(&self.config),
         };
 
         let mut request = self
@@ -1210,6 +1219,11 @@ fn parse_anthropic_sse_chunk_with_tools(
                                     Some("text_delta") => {
                                         if let Some(text) = delta.text {
                                             return Ok(Some(StreamChunk::Text(text)));
+                                        }
+                                    }
+                                    Some("thinking_delta") => {
+                                        if let Some(thinking) = delta.thinking {
+                                            return Ok(Some(StreamChunk::Thinking(thinking)));
                                         }
                                     }
                                     Some("input_json_delta") => {
@@ -1556,5 +1570,21 @@ data: {"type": "ping"}
         let mut tool_states = HashMap::new();
         let result = parse_anthropic_sse_chunk_with_tools(chunk, &mut tool_states).unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_stream_thinking_delta() {
+        let chunk = r#"event: content_block_delta
+data: {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "Let me reason about this..."}}
+
+"#;
+        let mut tool_states = HashMap::new();
+        let result = parse_anthropic_sse_chunk_with_tools(chunk, &mut tool_states).unwrap();
+        match result {
+            Some(StreamChunk::Thinking(text)) => {
+                assert_eq!(text, "Let me reason about this...");
+            }
+            other => panic!("Expected Thinking chunk, got {:?}", other),
+        }
     }
 }
