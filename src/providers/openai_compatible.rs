@@ -574,7 +574,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         tools: Option<&[Tool]>,
     ) -> Result<Box<dyn ChatResponse>, LLMError> {
         crate::chat::ensure_no_audio(messages, AUDIO_UNSUPPORTED)?;
-        if self.config.api_key.is_empty() {
+        if T::REQUIRES_AUTH && self.config.api_key.is_empty() {
             return Err(LLMError::AuthError(format!(
                 "Missing {} API key",
                 T::PROVIDER_NAME
@@ -628,8 +628,10 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         let mut request = self
             .client
             .post(url)
-            .bearer_auth(&self.config.api_key)
             .json(&body);
+        if !self.config.api_key.is_empty() {
+            request = request.bearer_auth(&self.config.api_key);
+        }
         // Add custom headers if provider specifies them
         if let Some(headers) = T::custom_headers() {
             for (key, value) in headers {
@@ -705,7 +707,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         LLMError,
     > {
         crate::chat::ensure_no_audio(messages, AUDIO_UNSUPPORTED)?;
-        if self.config.api_key.is_empty() {
+        if T::REQUIRES_AUTH && self.config.api_key.is_empty() {
             return Err(LLMError::AuthError(format!(
                 "Missing {} API key",
                 T::PROVIDER_NAME
@@ -750,8 +752,10 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         let mut request = self
             .client
             .post(url)
-            .bearer_auth(&self.config.api_key)
             .json(&body);
+        if !self.config.api_key.is_empty() {
+            request = request.bearer_auth(&self.config.api_key);
+        }
         if let Some(headers) = T::custom_headers() {
             for (key, value) in headers {
                 request = request.header(key, value);
@@ -799,7 +803,7 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<ChatStreamChunk, LLMError>> + Send>>, LLMError>
     {
         crate::chat::ensure_no_audio(messages, AUDIO_UNSUPPORTED)?;
-        if self.config.api_key.is_empty() {
+        if T::REQUIRES_AUTH && self.config.api_key.is_empty() {
             return Err(LLMError::AuthError(format!(
                 "Missing {} API key",
                 T::PROVIDER_NAME
@@ -853,8 +857,10 @@ impl<T: OpenAIProviderConfig> ChatProvider for OpenAICompatibleProvider<T> {
         let mut request = self
             .client
             .post(url)
-            .bearer_auth(&self.config.api_key)
             .json(&body);
+        if !self.config.api_key.is_empty() {
+            request = request.bearer_auth(&self.config.api_key);
+        }
 
         if let Some(headers) = T::custom_headers() {
             for (key, value) in headers {
