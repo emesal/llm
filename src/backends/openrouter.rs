@@ -136,3 +136,27 @@ impl ModelsProvider for OpenRouter {
         Ok(Box::new(result))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::openai_compatible::OpenAIProviderConfig;
+
+    #[test]
+    fn openrouter_does_not_require_auth() {
+        assert!(!OpenRouterConfig::REQUIRES_AUTH);
+    }
+
+    /// Dummy config that uses all trait defaults — verifies the default is `true`.
+    struct DefaultsOnly;
+    impl OpenAIProviderConfig for DefaultsOnly {
+        const PROVIDER_NAME: &'static str = "Test";
+        const DEFAULT_BASE_URL: &'static str = "http://localhost/";
+        const DEFAULT_MODEL: &'static str = "test";
+    }
+
+    #[test]
+    fn default_requires_auth_is_true() {
+        assert!(DefaultsOnly::REQUIRES_AUTH);
+    }
+}
