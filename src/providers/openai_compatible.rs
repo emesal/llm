@@ -103,6 +103,9 @@ pub trait OpenAIProviderConfig: Send + Sync {
     const SUPPORTS_PARALLEL_TOOL_CALLS: bool = false;
     /// Whether this provider supports stream options (like include_usage)
     const SUPPORTS_STREAM_OPTIONS: bool = false;
+    /// Whether this provider requires an API key for requests.
+    /// When `false`, requests may be sent without an `Authorization` header.
+    const REQUIRES_AUTH: bool = true;
     /// Custom headers to add to requests
     fn custom_headers() -> Option<Vec<(String, String)>> {
         None
