@@ -26,6 +26,7 @@ impl OpenAIProviderConfig for OpenRouterConfig {
     const SUPPORTS_REASONING_EFFORT: bool = false;
     const SUPPORTS_STRUCTURED_OUTPUT: bool = true;
     const SUPPORTS_PARALLEL_TOOL_CALLS: bool = false;
+    const REQUIRES_AUTH: bool = false;
 }
 
 pub type OpenRouter = OpenAICompatibleProvider<OpenRouterConfig>;
@@ -119,21 +120,14 @@ impl ModelsProvider for OpenRouter {
         &self,
         _request: Option<&ModelListRequest>,
     ) -> Result<Box<dyn ModelListResponse>, LLMError> {
-        if self.config.api_key.is_empty() {
-            return Err(LLMError::AuthError(
-                "Missing OpenRouter API key".to_string(),
-            ));
-        }
-
         let url = format!("{}models", OpenRouterConfig::DEFAULT_BASE_URL);
 
-        let resp = self
-            .client
-            .get(&url)
-            .bearer_auth(&self.config.api_key)
-            .send()
-            .await?
-            .error_for_status()?;
+        let mut request = self.client.get(&url);
+        if !self.config.api_key.is_empty() {
+            request = request.bearer_auth(&self.config.api_key);
+        }
+
+        let resp = request.send().await?.error_for_status()?;
 
         let result = StandardModelListResponse {
             inner: resp.json().await?,
