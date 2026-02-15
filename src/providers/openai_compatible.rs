@@ -1142,7 +1142,7 @@ pub fn chat_message_to_openai_message(chat_msg: ChatMessage) -> OpenAIChatMessag
                 tool_output: None,
                 tool_call_id: None,
             }])),
-            MessageType::ToolUse(_) => None,
+            MessageType::ToolUse(_) => Some(Right(chat_msg.content.clone())),
             MessageType::ToolResult(_) => None,
         },
         tool_calls: match &chat_msg.message_type {
