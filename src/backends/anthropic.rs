@@ -81,6 +81,8 @@ struct AnthropicTool<'a> {
     description: &'a str,
     #[serde(rename = "input_schema")]
     schema: &'a serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_control: Option<&'a serde_json::Value>,
 }
 
 /// Configuration for the thinking feature
@@ -470,6 +472,7 @@ impl Anthropic {
                     name: &tool.function.name,
                     description: &tool.function.description,
                     schema: &tool.function.parameters,
+                    cache_control: tool.cache_control.as_ref(),
                 })
                 .collect::<Vec<_>>()
         });
@@ -1586,5 +1589,80 @@ data: {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_de
             }
             other => panic!("Expected Thinking chunk, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_anthropic_tool_serialization_without_cache_control() {
+        let schema = serde_json::json!({"type": "object", "properties": {}});
+        let tool = AnthropicTool {
+            name: "my_tool",
+            description: "desc",
+            schema: &schema,
+            cache_control: None,
+        };
+
+        let json = serde_json::to_value(&tool).unwrap();
+        assert_eq!(json.get("name").unwrap(), "my_tool");
+        assert!(json.get("cache_control").is_none());
+    }
+
+    #[test]
+    fn test_anthropic_tool_serialization_with_cache_control() {
+        let schema = serde_json::json!({"type": "object", "properties": {}});
+        let cc = serde_json::json!({"type": "ephemeral"});
+        let tool = AnthropicTool {
+            name: "my_tool",
+            description: "desc",
+            schema: &schema,
+            cache_control: Some(&cc),
+        };
+
+        let json = serde_json::to_value(&tool).unwrap();
+        assert_eq!(
+            json.get("cache_control").unwrap(),
+            &serde_json::json!({"type": "ephemeral"})
+        );
+    }
+
+    #[test]
+    fn test_prepare_tools_maps_cache_control() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: crate::chat::FunctionTool {
+                name: "get_weather".to_string(),
+                description: "Get weather".to_string(),
+                parameters: serde_json::json!({"type": "object", "properties": {}}),
+            },
+            cache_control: Some(serde_json::json!({"type": "ephemeral"})),
+        }];
+
+        let (anthropic_tools, _) =
+            Anthropic::prepare_tools_and_choice(Some(&tools), None, &None);
+
+        let anthropic_tools = anthropic_tools.expect("tools should be present");
+        assert_eq!(anthropic_tools.len(), 1);
+        assert_eq!(
+            anthropic_tools[0].cache_control,
+            Some(&serde_json::json!({"type": "ephemeral"}))
+        );
+    }
+
+    #[test]
+    fn test_prepare_tools_none_cache_control() {
+        let tools = vec![Tool {
+            tool_type: "function".to_string(),
+            function: crate::chat::FunctionTool {
+                name: "get_weather".to_string(),
+                description: "Get weather".to_string(),
+                parameters: serde_json::json!({"type": "object", "properties": {}}),
+            },
+            cache_control: None,
+        }];
+
+        let (anthropic_tools, _) =
+            Anthropic::prepare_tools_and_choice(Some(&tools), None, &None);
+
+        let anthropic_tools = anthropic_tools.expect("tools should be present");
+        assert!(anthropic_tools[0].cache_control.is_none());
     }
 }
