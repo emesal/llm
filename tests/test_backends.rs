@@ -1145,6 +1145,7 @@ async fn test_anthropic_chat_stream_with_tools() {
                             StreamChunk::ToolUseInputDelta { .. } => {
                                 // These are intermediate chunks, we don't need to collect them
                             }
+                            StreamChunk::Thinking(_) => {}
                         }
                     }
                     Err(e) => panic!("Stream error: {e}"),
